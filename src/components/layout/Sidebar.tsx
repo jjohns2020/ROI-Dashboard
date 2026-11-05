@@ -51,6 +51,30 @@ export function Sidebar() {
           </button>
         ))}
       </div>
+      {state.role === 'client' && (
+        <div id="clientServices">
+          <h3>Your services</h3>
+          <label className="toggle">
+            <input
+              id="clientAgency"
+              type="checkbox"
+              checked={client.agency === true}
+              onChange={(e) => dispatch({ type: 'setProfileFlag', flag: 'agency', value: e.target.checked })}
+            />{' '}
+            Uses collection agencies
+          </label>
+          <label className="toggle">
+            <input
+              id="clientDialer"
+              type="checkbox"
+              checked={client.dialer === true}
+              onChange={(e) => dispatch({ type: 'setProfileFlag', flag: 'dialer', value: e.target.checked })}
+            />{' '}
+            Uses a dialer
+          </label>
+          <p className="note">Turn a service on to add its results to this dashboard.</p>
+        </div>
+      )}
       <div id="internalPanel" style={{ display: state.present ? 'none' : undefined }}>
         <h3>Client profile</h3>
         {PROFILE_TOGGLES.map(([flag, id, label]) => (

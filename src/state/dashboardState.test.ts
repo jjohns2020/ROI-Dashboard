@@ -60,7 +60,7 @@ describe('dashboard state', () => {
       [
         { type: 'selectClient', key: 'washu' },
         { type: 'setPresent', present: false },
-        { type: 'setProfileFlag', flag: 'dialer', value: true },
+        { type: 'setProfileFlag', flag: 'ein', value: true },
         { type: 'setView', view: 'insights' },
         { type: 'openExport' },
       ] as DashboardAction[]

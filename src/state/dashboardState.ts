@@ -86,7 +86,7 @@ export function normalize(s: DashboardState, ds: Dataset): DashboardState {
   let { view, scrub } = state;
   if (state.present && (INTERNAL_VIEWS as string[]).includes(view)) view = 'exec';
   const navKey = view.startsWith('d_') ? 'ops' : view;
-  if (!navItems(c, state.present).some((x) => x.key === navKey)) view = 'exec';
+  if (!navItems(c, state.present, { insights: state.role !== 'client' }).some((x) => x.key === navKey)) view = 'exec';
   const details = visibleDetails(ds.details[state.clientKey], c);
   if (view.startsWith('d_')) {
     const d = details[view.slice(2) as WorkflowKey];

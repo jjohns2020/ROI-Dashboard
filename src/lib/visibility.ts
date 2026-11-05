@@ -30,7 +30,7 @@ export interface NavItem {
   tag?: 'Agency' | 'Dialer' | 'Internal only';
 }
 
-export function navItems(c: Client, present: boolean): NavItem[] {
+export function navItems(c: Client, present: boolean, options?: { insights?: boolean }): NavItem[] {
   const v: NavItem[] = [
     { key: 'exec', label: 'Executive Summary' },
     { key: 'roi', label: 'ROI Detail' },
@@ -41,7 +41,7 @@ export function navItems(c: Client, present: boolean): NavItem[] {
   if (c.seg) v.push({ key: 'seg', label: 'Segmentation' });
   if (c.agency) v.push({ key: 'agency', label: 'Agency Performance', tag: 'Agency' });
   if (c.dialer) v.push({ key: 'dialer', label: 'Dialer Performance', tag: 'Dialer' });
-  v.push({ key: 'insights', label: 'Analyst Insights' });
+  if (options?.insights !== false) v.push({ key: 'insights', label: 'Analyst Insights' });
   v.push({ key: 'recs', label: 'Success Plan' });
   if (!present) {
     v.push({ key: 'opps', label: 'Opportunities', tag: 'Internal only' });

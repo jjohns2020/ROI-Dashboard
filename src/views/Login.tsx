@@ -47,7 +47,7 @@ export function Login({ clients, onSignedIn }: { clients: Record<string, { name:
         <div className="doors">
           <form onSubmit={signInClient}>
             <h2>Client</h2>
-            <p>Your organization's dashboard only. Other clients and internal notes stay hidden.</p>
+            <p>Your organization's dashboard only. Analyst insights, other clients, and internal notes stay hidden.</p>
             <label htmlFor="loginClient">Organization</label>
             <select id="loginClient" value={clientKey} onChange={(e) => setClientKey(e.target.value)}>
               {keys.map((key) => (

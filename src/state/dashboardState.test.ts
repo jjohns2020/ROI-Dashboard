@@ -61,7 +61,7 @@ describe('dashboard state', () => {
         { type: 'selectClient', key: 'washu' },
         { type: 'setPresent', present: false },
         { type: 'setProfileFlag', flag: 'dialer', value: true },
-        { type: 'setView', view: 'opps' },
+        { type: 'setView', view: 'insights' },
       ] as DashboardAction[]
     ).reduce((st, a) => reducer(st, a), start);
     expect(s.role).toBe('client');

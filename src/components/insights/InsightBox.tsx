@@ -15,6 +15,7 @@ const pill = { color: '#fff', fontSize: 10, fontWeight: 700, padding: '2px 8px',
 /** Analyst insights for the given areas. Internal-audience items are hidden in presentation mode. */
 export function InsightBox({ areas, title }: { areas: string[]; title?: string }) {
   const { insights, state } = useDashboard();
+  if (state.role === 'client') return null;
   const L = insights.filter((i) => areas.includes(i.area)).filter(audienceFilter(state.present));
   if (!L.length) return null;
   return (

@@ -108,6 +108,8 @@ describe('visibility rules', () => {
     expect(keys(true)).not.toEqual(expect.arrayContaining(['opps']));
     expect(keys(true)).not.toContain('checks');
     expect(keys(true)).not.toContain('portfolio');
+    expect(keys(true)).toContain('insights');
+    expect(navItems(maine, true, { insights: false }).map((x) => x.key)).not.toContain('insights');
   });
 
   it('shows profile-driven views only when the profile flag is set', () => {

@@ -33,7 +33,7 @@ export function Sidebar() {
       </div>
       <h3>Views</h3>
       <div id="tabs">
-        {navItems(client, state.present).map((x) => (
+        {navItems(client, state.present, { insights: state.role !== 'client' }).map((x) => (
           <button
             key={x.key}
             type="button"

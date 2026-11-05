@@ -21,9 +21,41 @@ export function passwordMatches(password: string) {
   return password === SAMPLE_PASSWORD;
 }
 
+/** Spellings that should still open the right organization. */
+const LOGIN_ALIASES: Record<string, string> = {
+  oschner: 'ochsner',
+  stlukes: 'saintlukes',
+  saintluke: 'saintlukes',
+  mainehealth: 'maine',
+  washingtonuniversity: 'washu',
+};
+
+/** Letters and digits only, so "Saint Luke's" and "saintlukes" are the same login. */
+export function normalizeLogin(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** The sample organization for a typed login name, or null when it is not one of the sample accounts. */
+export function matchClientKey(clients: Record<string, { name: string }>, login: string): string | null {
+  const normalized = normalizeLogin(login);
+  if (!normalized) return null;
+  const alias = LOGIN_ALIASES[normalized];
+  if (alias && clients[alias]) return alias;
+  for (const [key, client] of Object.entries(clients)) {
+    if (normalizeLogin(key) === normalized || normalizeLogin(client.name) === normalized) return key;
+  }
+  return null;
+}
+
 export function clientSession(clients: Record<string, { name: string }>, clientKey: string): Session | null {
   if (!clients[clientKey]) return null;
   return { role: 'client', clientKey, label: clients[clientKey].name };
+}
+
+export function clientSessionByLogin(clients: Record<string, { name: string }>, login: string): Session | null {
+  const key = matchClientKey(clients, login);
+  if (!key) return null;
+  return clientSession(clients, key);
 }
 
 export function consultantSession(): Session {

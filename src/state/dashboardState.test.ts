@@ -13,7 +13,7 @@ describe('dashboard state', () => {
     const s = run();
     expect(s.clientKey).toBe('maine');
     expect(s.view).toBe('exec');
-    expect(s.range).toEqual({ fI: 0, tI: 20 });
+    expect(s.range).toEqual({ fI: 0, tI: ds.monthly.maine.months.length - 1 });
   });
 
   it('presentation mode leaves internal views for Executive Summary', () => {
@@ -70,7 +70,19 @@ describe('dashboard state', () => {
     expect(s.present).toBe(true);
     expect(s.view).toBe('exec');
     expect(s.exportOpen).toBe(false);
+    expect(s.profiles.maine.ein).toBe(false);
     expect(s.profiles.maine.dialer).toBe(false);
+  });
+
+  it('a client can turn on agency or dialer and open those results', () => {
+    const start = normalize(initialState(ds, clientSession(ds.clients, 'maine')!), ds);
+    const dialer = reducer(start, { type: 'setProfileFlag', flag: 'dialer', value: true });
+    expect(dialer.profiles.maine.dialer).toBe(true);
+    expect(dialer.view).toBe('dialer');
+    const agency = reducer(start, { type: 'setProfileFlag', flag: 'agency', value: true });
+    expect(agency.profiles.maine.agency).toBe(true);
+    expect(agency.view).toBe('agency');
+    expect(reducer(dialer, { type: 'setProfileFlag', flag: 'pfc', value: false }).profiles.maine.pfc).toBe(true);
   });
 
   it('custom month pickers keep from ≤ to and switch the preset to Custom', () => {

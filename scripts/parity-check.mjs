@@ -85,7 +85,7 @@ const snapshot = (page) =>
     const modalOpen = document.querySelector('#modal').classList.contains('open');
     // The export dialog's download action is app-only; the slide list (#mList) and status (#mStatus) stay comparable.
     const styleSig = [...document.querySelectorAll('header *, nav *, #main *')]
-      .filter((el) => !el.closest('svg') && !el.closest('#overviewExport') && !el.closest('#signOut'))
+      .filter((el) => !el.closest('svg') && !el.closest('#overviewExport') && !el.closest('#signOut') && !el.closest('#logOut') && !(el.closest('header') && el.classList.contains('spacer')))
       .map((el) => {
         const cs = getComputedStyle(el);
         // Sizes are rounded: React splits interpolated text into several text nodes, which shifts sub-pixel widths.

@@ -2,7 +2,7 @@ import { DATE_PRESETS, type DatePreset } from '../../lib/dateRange';
 import { useDashboard } from '../../state/DashboardContext';
 
 export function Header() {
-  const { ds, state, dispatch, calendar, client } = useDashboard();
+  const { ds, state, dispatch, calendar, client, signOut } = useDashboard();
   return (
     <header>
       <div>
@@ -84,6 +84,9 @@ export function Header() {
           Export to PowerPoint
         </button>
       )}
+      <button className="btn" id="logOut" type="button" onClick={signOut}>
+        Log out
+      </button>
     </header>
   );
 }

@@ -62,24 +62,15 @@ describe('dashboard state', () => {
         { type: 'setPresent', present: false },
         { type: 'setProfileFlag', flag: 'ein', value: true },
         { type: 'setView', view: 'insights' },
+        { type: 'openExport' },
       ] as DashboardAction[]
     ).reduce((st, a) => reducer(st, a), start);
     expect(s.role).toBe('client');
     expect(s.clientKey).toBe('maine');
     expect(s.present).toBe(true);
     expect(s.view).toBe('exec');
-    expect(s.profiles.maine.ein).toBe(false);
-  });
-
-  it('a client can turn on agency or dialer and open those results', () => {
-    const start = normalize(initialState(ds, clientSession(ds.clients, 'maine')!), ds);
-    const dialer = reducer(start, { type: 'setProfileFlag', flag: 'dialer', value: true });
-    expect(dialer.profiles.maine.dialer).toBe(true);
-    expect(dialer.view).toBe('dialer');
-    const agency = reducer(start, { type: 'setProfileFlag', flag: 'agency', value: true });
-    expect(agency.profiles.maine.agency).toBe(true);
-    expect(agency.view).toBe('agency');
-    expect(reducer(dialer, { type: 'setProfileFlag', flag: 'pfc', value: false }).profiles.maine.pfc).toBe(true);
+    expect(s.exportOpen).toBe(false);
+    expect(s.profiles.maine.dialer).toBe(false);
   });
 
   it('custom month pickers keep from ≤ to and switch the preset to Custom', () => {

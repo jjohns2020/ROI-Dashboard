@@ -51,7 +51,7 @@ The app opens on a sample sign-in. It is not connected to a directory. The sampl
 - **Client** — type a login name (`maine`, `washu`, `novant`, `banner`, `saintlukes`, `rush`, or `ochsner`; `oschner` also opens Ochsner). That session shows only that organization's dashboard. Analyst Insights, the insight notes on other pages, downloads, other clients, Opportunity Sizing, Data Checks, and Portfolio stay hidden. The client can turn on collection agencies or a dialer to add those results. MaineHealth and WashU keep their workbook ROI figures; Oct–Dec 2025 and the other five organizations are illustrative sample data.
 - **Consultant** — every client dashboard, the client switcher, and the internal pages and notes. Presentation mode still previews the client view.
 
-Sign out is at the bottom of the view list. The choice is remembered for the browser tab.
+Log out is in the header and at the bottom of the view list. Either one returns to the sign-in screen. The choice is remembered for the browser tab until then.
 
 ## Internal vs client-facing
 

@@ -15,6 +15,7 @@ export function App({ dataSource = sampleDataSource }: { dataSource?: DataSource
   const signOut = useCallback(() => {
     clearSession();
     setSession(null);
+    window.scrollTo(0, 0);
   }, []);
 
   if (!session) {

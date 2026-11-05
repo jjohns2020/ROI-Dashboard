@@ -103,7 +103,7 @@ export function Sidebar() {
         </p>
       </div>
       <button id="signOut" className="btn" type="button" style={{ marginTop: 16, border: '1px solid #005EB8', width: '100%' }} onClick={signOut}>
-        Sign out
+        Log out
       </button>
     </nav>
   );

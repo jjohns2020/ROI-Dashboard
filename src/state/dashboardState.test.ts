@@ -62,12 +62,14 @@ describe('dashboard state', () => {
         { type: 'setPresent', present: false },
         { type: 'setProfileFlag', flag: 'dialer', value: true },
         { type: 'setView', view: 'insights' },
+        { type: 'openExport' },
       ] as DashboardAction[]
     ).reduce((st, a) => reducer(st, a), start);
     expect(s.role).toBe('client');
     expect(s.clientKey).toBe('maine');
     expect(s.present).toBe(true);
     expect(s.view).toBe('exec');
+    expect(s.exportOpen).toBe(false);
     expect(s.profiles.maine.dialer).toBe(false);
   });
 

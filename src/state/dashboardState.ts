@@ -81,7 +81,7 @@ export const scrubTabs = (c: Client): [ScrubKey, string][] =>
  * and a workflow detail page selects its scrub trend.
  */
 export function normalize(s: DashboardState, ds: Dataset): DashboardState {
-  const state = s.role === 'client' ? { ...s, present: true } : s;
+  const state = s.role === 'client' ? { ...s, present: true, exportOpen: false } : s;
   const c = effectiveClient(ds, state.profiles, state.clientKey);
   let { view, scrub } = state;
   if (state.present && (INTERNAL_VIEWS as string[]).includes(view)) view = 'exec';
@@ -97,7 +97,7 @@ export function normalize(s: DashboardState, ds: Dataset): DashboardState {
     const tabs = scrubTabs(c);
     if (!tabs.some((t) => t[0] === scrub)) scrub = tabs[0][0];
   }
-  if (view === state.view && scrub === state.scrub && state.present === s.present) return s;
+  if (view === state.view && scrub === state.scrub && state.present === s.present && state.exportOpen === s.exportOpen) return s;
   return { ...state, view, scrub };
 }
 
@@ -137,6 +137,7 @@ export function reduce(s: DashboardState, a: DashboardAction, ds: Dataset): Dash
     case 'setMedSrc':
       return { ...s, medSrc: a.src };
     case 'openExport':
+      if (s.role === 'client') return s;
       return { ...s, exportOpen: true };
     case 'closeExport':
       return { ...s, exportOpen: false };

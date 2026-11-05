@@ -79,9 +79,11 @@ export function Header() {
           Client presentation mode
         </label>
       )}
-      <button className="btn primary" id="exportBtn" type="button" onClick={() => dispatch({ type: 'openExport' })}>
-        Export to PowerPoint
-      </button>
+      {state.role === 'consultant' && (
+        <button className="btn primary" id="exportBtn" type="button" onClick={() => dispatch({ type: 'openExport' })}>
+          Export to PowerPoint
+        </button>
+      )}
     </header>
   );
 }

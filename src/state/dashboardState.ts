@@ -123,11 +123,12 @@ export function reduce(s: DashboardState, a: DashboardAction, ds: Dataset): Dash
       if (s.role === 'client') return s;
       return { ...s, present: a.present };
     case 'setProfileFlag': {
-      if (s.role === 'client') return s;
+      if (s.role === 'client' && a.flag !== 'agency' && a.flag !== 'dialer') return s;
       const profiles = { ...s.profiles, [s.clientKey]: { ...s.profiles[s.clientKey], [a.flag]: a.value } };
       const next = { ...s, profiles };
       if (a.flag === 'ein' && !a.value) next.medSrc = 'all';
       if (a.flag === 'dialer' && a.value) next.view = 'dialer';
+      if (s.role === 'client' && a.flag === 'agency' && a.value) next.view = 'agency';
       return next;
     }
     case 'setScrub':

@@ -49,3 +49,19 @@ tr.total td{font-weight:700;background:#F0EAF6}
 .slide-add{color:var(--teal);font-weight:600}
 svg text{font-family:"Segoe UI",Arial,sans-serif}
 @media (max-width:900px){.layout{grid-template-columns:1fr}.grid2{grid-template-columns:1fr}}
+.login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#005EB8,#662D91)}
+.login .panel{background:#fff;border-radius:12px;padding:28px;width:min(760px,100%);box-shadow:0 8px 30px rgba(0,0,0,.18)}
+.login .eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#662D91}
+.login h1{color:#005EB8;font-size:26px;margin:4px 0 0}
+.login .sub{color:#53565A;font-size:13px;margin:8px 0 18px}
+.login .doors{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.login form{border:1px solid #E1E3E6;border-radius:10px;padding:16px;display:flex;flex-direction:column}
+.login h2{margin:0;color:#005EB8;font-size:18px}
+.login form p{color:#53565A;font-size:13px;margin:6px 0 0}
+.login label{display:block;font-size:12px;font-weight:600;color:#53565A;margin:12px 0 4px}
+.login input,.login select{width:100%;padding:10px 12px;border:1px solid #E1E3E6;border-radius:6px;font:inherit;background:#fff}
+.login .error{color:#D6007B;font-size:13px;margin:12px 0 0}
+.login .accounts{margin-top:16px;background:#F4F6F9;border-radius:8px;padding:12px;font-size:13px;color:#53565A;line-height:1.5}
+.login button.btn.primary{width:100%;margin-top:auto}
+#clientName{font-weight:600}
+@media (max-width:700px){.login .doors{grid-template-columns:1fr}}

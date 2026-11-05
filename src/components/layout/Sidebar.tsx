@@ -11,7 +11,7 @@ const PROFILE_TOGGLES: [keyof ClientProfileFlags, string, string][] = [
 ];
 
 export function Sidebar() {
-  const { state, dispatch, client } = useDashboard();
+  const { state, dispatch, client, signOut } = useDashboard();
   const activeKey = state.view.startsWith('d_') ? 'ops' : state.view;
   return (
     <nav>
@@ -27,7 +27,9 @@ export function Sidebar() {
           marginBottom: 8,
         }}
       >
-        Presentation mode: internal views, other clients and consultant notes are hidden.
+        {state.role === 'client'
+          ? `Signed in as ${client.name}. This dashboard is limited to your organization.`
+          : 'Presentation mode: internal views, other clients and consultant notes are hidden.'}
       </div>
       <h3>Views</h3>
       <div id="tabs">
@@ -76,6 +78,9 @@ export function Sidebar() {
           appear.
         </p>
       </div>
+      <button id="signOut" className="btn" type="button" style={{ marginTop: 16, border: '1px solid #005EB8', width: '100%' }} onClick={signOut}>
+        Sign out
+      </button>
     </nav>
   );
 }

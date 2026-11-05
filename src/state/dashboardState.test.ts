@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sampleDataSource } from '../data/dataSource';
 import { dashboardReducer, initialState, normalize, type DashboardAction, type DashboardState } from './dashboardState';
+import { clientSession } from '../lib/auth';
 
 const ds = sampleDataSource.load();
 const reducer = dashboardReducer(ds);
@@ -51,6 +52,23 @@ describe('dashboard state', () => {
   it('Trending drops the PIV scrub tab when PFC is off', () => {
     const s = run({ type: 'openTrending', scrub: 'piv' }, { type: 'setProfileFlag', flag: 'pfc', value: false });
     expect(s.scrub).toBe('rm');
+  });
+
+  it('a client session cannot leave that organization or open the consultant view', () => {
+    const start = normalize(initialState(ds, clientSession(ds.clients, 'maine')!), ds);
+    const s = (
+      [
+        { type: 'selectClient', key: 'washu' },
+        { type: 'setPresent', present: false },
+        { type: 'setProfileFlag', flag: 'dialer', value: true },
+        { type: 'setView', view: 'opps' },
+      ] as DashboardAction[]
+    ).reduce((st, a) => reducer(st, a), start);
+    expect(s.role).toBe('client');
+    expect(s.clientKey).toBe('maine');
+    expect(s.present).toBe(true);
+    expect(s.view).toBe('exec');
+    expect(s.profiles.maine.dialer).toBe(false);
   });
 
   it('custom month pickers keep from ≤ to and switch the preset to Custom', () => {

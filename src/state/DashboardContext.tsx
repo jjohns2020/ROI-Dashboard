@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useReducer, type Dispatch, type Rea
 import type { Client, Dataset, MedicaidSplit, WorkflowDetail, WorkflowKey } from '../data/types';
 import { rangeLabel } from '../lib/dateRange';
 import { medicaidFactor } from '../lib/roi';
+import type { Session } from '../lib/auth';
 import { usesEin, usesPfc, visibleDetails, visibleInsights } from '../lib/visibility';
 import {
   calendarOf,
@@ -28,13 +29,24 @@ export interface DashboardValue {
   medSplit: MedicaidSplit | undefined;
   medF: (kind: 'cov' | 'pay') => number;
   guarRatio: number;
+  signOut: () => void;
 }
 
 const Ctx = createContext<DashboardValue | null>(null);
 
-export function DashboardProvider({ dataset, children }: { dataset: Dataset; children: ReactNode }) {
+export function DashboardProvider({
+  dataset,
+  session,
+  onSignOut,
+  children,
+}: {
+  dataset: Dataset;
+  session: Session;
+  onSignOut: () => void;
+  children: ReactNode;
+}) {
   const reducer = useMemo(() => dashboardReducer(dataset), [dataset]);
-  const [state, dispatch] = useReducer(reducer, dataset, (ds) => normalize(initialState(ds), ds));
+  const [state, dispatch] = useReducer(reducer, dataset, (ds) => normalize(initialState(ds, session), ds));
   const value = useMemo<DashboardValue>(() => {
     const client = effectiveClient(dataset, state.profiles, state.clientKey);
     const calendar = calendarOf(dataset);
@@ -54,8 +66,9 @@ export function DashboardProvider({ dataset, children }: { dataset: Dataset; chi
       medSplit,
       medF: (kind) => medicaidFactor(kind, medSplit, ein, state.medSrc),
       guarRatio: dataset.guarRatio[state.clientKey],
+      signOut: onSignOut,
     };
-  }, [dataset, state]);
+  }, [dataset, state, onSignOut]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

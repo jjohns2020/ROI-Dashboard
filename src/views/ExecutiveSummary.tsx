@@ -67,7 +67,7 @@ export function ExecutiveSummary() {
         />
         <p className="note">Full detail on the Trending page.</p>
       </Card>
-      {top.length > 0 && (
+      {state.role !== 'client' && top.length > 0 && (
         <div className="card" style={{ borderInlineStart: '5px solid #662D91' }}>
           <h4 style={{ color: '#662D91' }}>Analyst highlights</h4>
           {top.map((i, idx) => (

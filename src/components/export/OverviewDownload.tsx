@@ -24,7 +24,7 @@ export function OverviewDownload({ id, className, label, style }: { id?: string;
         client,
         range: state.range,
         rangeLabel,
-        insights,
+        insights: state.role === 'client' ? [] : insights,
       });
       setMessage('Downloaded ' + saved.fileName + '.');
     } catch (err) {

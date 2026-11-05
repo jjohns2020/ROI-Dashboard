@@ -44,6 +44,15 @@ src/
   styles/global.css     Prototype CSS, unchanged
 ```
 
+## Sign-in
+
+The app opens on a sample sign-in. It is not connected to a directory. The sample password for every account is `roi`.
+
+- **Client** — choose MaineHealth or WashU. That session shows only that organization's dashboard. Analyst Insights, the insight notes on other pages, other clients, Opportunity Sizing, Data Checks, and Portfolio stay hidden.
+- **Consultant** — every client dashboard, the client switcher, and the internal pages and notes. Presentation mode still previews the client view.
+
+Sign out is at the bottom of the view list. The choice is remembered for the browser tab.
+
 ## Internal vs client-facing
 
 - Opportunity Sizing, Data Checks and Portfolio are internal only: hidden from navigation in presentation mode and

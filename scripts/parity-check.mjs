@@ -42,6 +42,15 @@ async function openPage(path) {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto(base + path, { waitUntil: 'load' });
   if (process.env.PARITY_VERBOSE) console.log('loaded', path);
+  // The app opens on the sample sign-in. Parity compares the consultant dashboard, which is the full prototype view.
+  if (await page.$('#login')) {
+    await page.$eval('#loginConsultantPass', (el) => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      set.call(el, 'roi');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.$eval('#loginConsultantSubmit', (el) => el.click());
+  }
   await page.waitForSelector('#main .title, #main p', { timeout: 15000 });
   return { page, errors };
 }
@@ -76,7 +85,7 @@ const snapshot = (page) =>
     const modalOpen = document.querySelector('#modal').classList.contains('open');
     // The export dialog's download action is app-only; the slide list (#mList) and status (#mStatus) stay comparable.
     const styleSig = [...document.querySelectorAll('header *, nav *, #main *')]
-      .filter((el) => !el.closest('svg') && !el.closest('#overviewExport'))
+      .filter((el) => !el.closest('svg') && !el.closest('#overviewExport') && !el.closest('#signOut'))
       .map((el) => {
         const cs = getComputedStyle(el);
         // Sizes are rounded: React splits interpolated text into several text nodes, which shifts sub-pixel widths.
@@ -84,7 +93,7 @@ const snapshot = (page) =>
         return el.tagName + '.' + el.className + '{' + STYLE_PROPS.map(v).join(';') + '}';
       });
     return {
-      nav: norm(document.querySelector('nav').innerText),
+      nav: norm(document.querySelector('nav').innerText.replace(document.querySelector('#signOut')?.innerText || '', '')),
       // The Word download sits on Executive Highlights and is not part of the prototype.
       main: norm(document.querySelector('#main').innerText.replace(document.querySelector('#overviewExport')?.innerText || '', '')),
       svg: svgSig,

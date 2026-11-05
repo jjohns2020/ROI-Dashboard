@@ -24,7 +24,7 @@ export function ExportModal() {
   }, [state.exportOpen]);
 
   async function download() {
-    if (blocked || busy) return;
+    if (state.role === 'client' || blocked || busy) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -49,6 +49,8 @@ export function ExportModal() {
       setBusy(false);
     }
   }
+
+  if (state.role === 'client') return null;
 
   return (
     <div className={`modal ${state.exportOpen ? 'open' : ''}`} id="modal">

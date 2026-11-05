@@ -16,7 +16,7 @@ export function OverviewDownload({ id, className, label, style }: { id?: string;
   const [message, setMessage] = useState<string | null>(null);
 
   async function download() {
-    if (blocked || busy) return;
+    if (state.role === 'client' || blocked || busy) return;
     setBusy(true);
     setMessage(null);
     try {
@@ -24,7 +24,7 @@ export function OverviewDownload({ id, className, label, style }: { id?: string;
         client,
         range: state.range,
         rangeLabel,
-        insights: state.role === 'client' ? [] : insights,
+        insights,
       });
       setMessage('Downloaded ' + saved.fileName + '.');
     } catch (err) {
@@ -33,6 +33,8 @@ export function OverviewDownload({ id, className, label, style }: { id?: string;
       setBusy(false);
     }
   }
+
+  if (state.role === 'client') return null;
 
   return (
     <span id={id}>

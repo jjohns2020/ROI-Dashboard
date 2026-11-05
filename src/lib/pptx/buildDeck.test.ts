@@ -74,7 +74,7 @@ describe('PowerPoint export', () => {
     expect(canExport('REVIEW')).toBe(true);
     expect(canExport('READY')).toBe(true);
     expect(canExport('NOT READY')).toBe(false);
-    expect(overallStatus(runChecks('maine', { ...ds.clients.maine, agency: true }, ds))).toBe('NOT READY');
+    expect(overallStatus(runChecks('maine', { ...ds.clients.maine, agency: true, agencyData: undefined }, ds))).toBe('NOT READY');
   });
 
   it('builds the MaineHealth review from workbook figures and leaves internal content out', async () => {

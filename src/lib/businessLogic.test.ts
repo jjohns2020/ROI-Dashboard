@@ -135,8 +135,8 @@ describe('data checks', () => {
     expect(overallStatus(runChecks('washu', washu, ds))).toBe('REVIEW');
   });
 
-  it('turning on agencies for MaineHealth (no agency data) produces a FIX', () => {
-    const r = runChecks('maine', { ...maine, agency: true }, ds);
+  it('turning on agencies without agency data produces a FIX', () => {
+    const r = runChecks('maine', { ...maine, agency: true, agencyData: undefined }, ds);
     expect(r.find((x) => x.t.startsWith('Agency results'))!.s).toBe('FIX');
     expect(overallStatus(r)).toBe('NOT READY');
   });

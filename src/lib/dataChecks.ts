@@ -10,7 +10,7 @@ export interface CheckResult {
 }
 
 /** Pre-export checklist for one client (internal only). `c` is the client with current profile flags applied. */
-export function runChecks(k: ClientKey, c: Client, ds: Pick<Dataset, 'scrubData' | 'medSplit'>): CheckResult[] {
+export function runChecks(k: ClientKey, c: Client, ds: Pick<Dataset, 'scrubData' | 'medSplit' | 'monthly'>): CheckResult[] {
   const r: CheckResult[] = [];
   const ok = (t: string, s: CheckStatus, w: string) => r.push({ t, s, w });
   const roi = c.quantified / c.sub;
@@ -18,7 +18,12 @@ export function runChecks(k: ClientKey, c: Client, ds: Pick<Dataset, 'scrubData'
   ok('ROI within plausible range (0.5x – 50x)', roi >= 0.5 && roi <= 50 ? 'PASS' : 'REVIEW', 'ROI Summary');
   ok('Agency results present when Has Agency = Y', !c.agency ? 'N/A' : c.agencyData ? 'PASS' : 'FIX', 'Agency Benchmarking');
   ok('Dialer data present when Has Dialer = Y', !c.dialer ? 'N/A' : 'REVIEW', 'Dialer Performance — sample data only in this mockup');
-  ok('Monthly Trend has 24 months for year-over-year', 'REVIEW', 'Monthly Trend — 21 months, sample data');
+  const monthCount = ds.monthly[k]?.months.length ?? 0;
+  ok(
+    'Monthly Trend has 24 months for year-over-year',
+    monthCount >= 24 ? 'PASS' : 'REVIEW',
+    monthCount >= 24 ? 'Monthly Trend — 24 months; Oct–Dec 2025 is illustrative' : `Monthly Trend — ${monthCount} months, sample data`,
+  );
   if (k === 'maine') ok('ROI method matches prior review', 'REVIEW', 'Jan–Jun counted all scrubs; Q3 counted recovery lift + return mail');
   if (k === 'washu') {
     ok('Cash Impact: recovery rate lift is negative — ROI uses patient payment lift', 'REVIEW', 'Cash Impact Analysis');

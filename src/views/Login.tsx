@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { clientSession, consultantSession, passwordMatches, SAMPLE_PASSWORD } from '../lib/auth';
+import { clientSessionByLogin, consultantSession, passwordMatches, SAMPLE_PASSWORD } from '../lib/auth';
 import type { Session } from '../lib/auth';
 
 /**
@@ -7,8 +7,8 @@ import type { Session } from '../lib/auth';
  * A consultant opens every dashboard, including internal insights.
  */
 export function Login({ clients, onSignedIn }: { clients: Record<string, { name: string }>; onSignedIn: (session: Session) => void }) {
-  const keys = Object.keys(clients);
-  const [clientKey, setClientKey] = useState(keys[0] ?? '');
+  const loginNames = Object.keys(clients);
+  const [loginName, setLoginName] = useState('');
   const [clientPassword, setClientPassword] = useState('');
   const [consultantPassword, setConsultantPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,9 +19,9 @@ export function Login({ clients, onSignedIn }: { clients: Record<string, { name:
       setError('That password does not match the sample sign-in.');
       return;
     }
-    const session = clientSession(clients, clientKey);
+    const session = clientSessionByLogin(clients, loginName);
     if (!session) {
-      setError('Choose an organization.');
+      setError('That login name is not a sample account.');
       return;
     }
     setError(null);
@@ -48,14 +48,13 @@ export function Login({ clients, onSignedIn }: { clients: Record<string, { name:
           <form onSubmit={signInClient}>
             <h2>Client</h2>
             <p>Your organization's dashboard only. Analyst insights, other clients, and internal notes stay hidden.</p>
-            <label htmlFor="loginClient">Organization</label>
-            <select id="loginClient" value={clientKey} onChange={(e) => setClientKey(e.target.value)}>
-              {keys.map((key) => (
-                <option key={key} value={key}>
-                  {clients[key].name}
-                </option>
-              ))}
-            </select>
+            <label htmlFor="loginUser">Login name</label>
+            <input
+              id="loginUser"
+              autoComplete="username"
+              value={loginName}
+              onChange={(e) => setLoginName(e.target.value)}
+            />
             <label htmlFor="loginClientPass">Password</label>
             <input id="loginClientPass" type="password" autoComplete="current-password" value={clientPassword} onChange={(e) => setClientPassword(e.target.value)} />
             <button className="btn primary" id="loginClientSubmit" type="submit">
@@ -84,9 +83,11 @@ export function Login({ clients, onSignedIn }: { clients: Record<string, { name:
           </p>
         )}
         <div className="accounts">
-          <b>Sample password:</b> {SAMPLE_PASSWORD}
+          <b>Login names:</b> {loginNames.join(', ')}
           <br />
-          Choose MaineHealth or WashU on the client side. The consultant side opens all of them.
+          <b>Password:</b> {SAMPLE_PASSWORD}
+          <br />
+          Ochsner also accepts the login name oschner. The consultant side opens every organization.
         </div>
       </div>
     </div>

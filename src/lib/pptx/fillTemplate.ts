@@ -3,6 +3,7 @@ import { overlaps, sumRange } from '../dateRange';
 import { int, money, moneyFull } from '../format';
 import { returnMailScale, roiRatio } from '../roi';
 import type { DeckInput } from './buildDeck';
+import { addedCharts, plotsForTemplate, rewriteChartXml } from './chartFill';
 
 const TEMPLATE_FILE = 'Utilization Review Template_2025.pptx';
 
@@ -82,8 +83,18 @@ function slidesToRemove(input: DeckInput) {
 
 function fillSlide1(xml: string, input: DeckInput) {
   let next = replaceExact(xml, 'Health System', input.client.name);
-  next = replaceNthExact(next, 'xxxx', [input.client.period, '', 'Sample data, not validated production results.']);
+  next = replaceNthExact(next, 'xxxx', [input.rangeLabel, '', 'Sample data, not validated production results.']);
   return replaceExact(next, ' – ', '');
+}
+
+/** Write the dashboard date range into every period placeholder and the success-plan date. */
+function fillDates(xml: string, input: DeckInput) {
+  return replaceTextNodes(xml, (text) => {
+    let next = text.replace(/<{2,3}\s*insert period\s*>{2,3}/gi, input.rangeLabel);
+    next = next.replace(/\bAugust 6, 2026\b/g, input.rangeLabel);
+    if (next.trim() === 'Insert Observations and/or proposals') next = `Selected dates: ${input.rangeLabel}`;
+    return next === text ? null : next;
+  });
 }
 
 function fillValue(xml: string, input: DeckInput) {
@@ -209,6 +220,78 @@ async function removeSlides(zip: JSZip, numbers: Set<number>) {
   zip.file('[Content_Types].xml', contentTypes);
 }
 
+const EXAMPLE_PICTURES: Record<number, string[] | 'all'> = {
+  19: 'all',
+  33: ['Picture 1'],
+  34: ['Picture 4'],
+  35: ['Picture 1'],
+  36: ['Picture 1'],
+  37: ['Picture 1'],
+};
+
+function removeExamplePictures(xml: string, names: string[] | 'all') {
+  return xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, (picture) => {
+    if (names === 'all') return '';
+    const name = picture.match(/<p:cNvPr[^>]*name="([^"]*)"/)?.[1];
+    return name && names.includes(name) ? '' : picture;
+  });
+}
+
+function chartPanel(shapeId: number) {
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${shapeId}" name="Dashboard chart panel"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="411480" y="320040"/><a:ext cx="17485440" cy="9647640"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>`;
+}
+
+function chartFrame(shapeId: number, relId: string, x: number, y: number, cx: number, cy: number) {
+  return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${shapeId}" name="Dashboard chart ${shapeId}"/><p:cNvGraphicFramePr><a:graphicFrameLocks/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="${relId}"/></a:graphicData></a:graphic></p:graphicFrame>`;
+}
+
+/** Payments, collection rate, dialer, and agency charts from the dashboard, placed on the matching template slides. */
+async function addDashboardCharts(zip: JSZip, input: DeckInput, dropped: Set<number>) {
+  let contentTypes = await zip.file('[Content_Types].xml')!.async('string');
+  let nextChart = 1 + Math.max(0, ...Object.keys(zip.files).map((path) => Number(path.match(/^ppt\/charts\/chart(\d+)\.xml$/)?.[1] ?? 0)));
+  const charts = addedCharts(input);
+  const prepared = new Set<number>();
+  if (input.client.agency && input.client.agencyData && !dropped.has(37)) {
+    const path = 'ppt/slides/slide37.xml';
+    const file = zip.file(path);
+    const names = EXAMPLE_PICTURES[37];
+    if (file && names) zip.file(path, removeExamplePictures(await file.async('string'), names));
+  }
+  for (const chart of charts) {
+    if (dropped.has(chart.slide)) continue;
+    const source = await zip.file(`ppt/charts/chart${chart.sourceChart}.xml`)!.async('string');
+    const number = nextChart++;
+    zip.file(`ppt/charts/chart${number}.xml`, rewriteChartXml(source, chart.plot));
+    zip.file(
+      `ppt/charts/_rels/chart${number}.xml.rels`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" Target="colors${chart.sourceChart}.xml"/><Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle" Target="style${chart.sourceChart}.xml"/></Relationships>`,
+    );
+    const part = `/ppt/charts/chart${number}.xml`;
+    if (!contentTypes.includes(`PartName="${part}"`)) {
+      contentTypes = contentTypes.replace(
+        '</Types>',
+        `<Override PartName="${part}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>`,
+      );
+    }
+    const relPath = `ppt/slides/_rels/slide${chart.slide}.xml.rels`;
+    let rels = await zip.file(relPath)!.async('string');
+    const used = [...rels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1]));
+    const rid = `rId${Math.max(0, ...used) + 1}`;
+    rels = rels.replace('</Relationships>', `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart" Target="../charts/chart${number}.xml"/></Relationships>`);
+    zip.file(relPath, rels);
+    const slidePath = `ppt/slides/slide${chart.slide}.xml`;
+    let slide = await zip.file(slidePath)!.async('string');
+    if (!prepared.has(chart.slide)) {
+      const names = EXAMPLE_PICTURES[chart.slide];
+      if (names) slide = removeExamplePictures(slide, names);
+      if (chart.slide === 39) slide = slide.replace('</p:spTree>', `${chartPanel(4000)}</p:spTree>`);
+      prepared.add(chart.slide);
+    }
+    zip.file(slidePath, slide.replace('</p:spTree>', `${chartFrame(4100 + number, rid, chart.x, chart.y, chart.cx, chart.cy)}</p:spTree>`));
+  }
+  zip.file('[Content_Types].xml', contentTypes);
+}
+
 /** Copy the uploaded Utilization Review template and write this client's figures into it. */
 export async function fillReviewTemplate(input: DeckInput): Promise<Uint8Array> {
   const zip = await JSZip.loadAsync(await templateBytes());
@@ -236,9 +319,19 @@ export async function fillReviewTemplate(input: DeckInput): Promise<Uint8Array> 
     let xml = await file.async('string');
     const edit = edits[number];
     if (edit) xml = edit(xml);
+    xml = fillDates(xml, input);
     xml = scrubAbsentWorkflows(xml, phrases);
     zip.file(path, xml);
   }
+  const plots = plotsForTemplate(input);
+  for (const path of Object.keys(zip.files).filter((name) => /^ppt\/charts\/chart\d+\.xml$/.test(name))) {
+    const number = Number(path.match(/chart(\d+)/)![1]);
+    const plot = plots.get(number);
+    const file = zip.file(path);
+    if (!plot || !file) continue;
+    zip.file(path, rewriteChartXml(await file.async('string'), plot));
+  }
+  await addDashboardCharts(zip, input, dropped);
   await removeSlides(zip, dropped);
   return zip.generateAsync({ type: 'uint8array' });
 }

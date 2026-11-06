@@ -59,7 +59,7 @@ export function ExportModal() {
           {plan.fileName}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--gray)' }}>
-          Download fills the uploaded Utilization Review template with this client's figures. Template example numbers are removed. The executive overview is a separate Word document, not a slide in this deck.
+          Download fills the Utilization Review template for the dates selected above. Period labels use that range, and the charts use the same series as the dashboard. Template example numbers are removed. The executive overview is a separate Word document, not a slide in this deck.
         </p>
         <p id="mStatus" style={{ fontSize: 13 }}>
           Data check status: <Chip status={ov} /> {ov === 'NOT READY' ? '— fix the FIX items on the Data Checks page before exporting.' : ''}

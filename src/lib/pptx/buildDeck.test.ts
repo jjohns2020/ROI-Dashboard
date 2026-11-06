@@ -165,6 +165,26 @@ describe('PowerPoint export', () => {
     expect(await zip.file('ppt/slides/slide18.xml')!.async('string')).not.toContain('<p:pic>');
     expect(await zip.file('ppt/slides/slide27.xml')!.async('string')).not.toContain('<p:pic>');
     expect(chartXml.join('\n')).not.toContain('externalData');
+    for (const xml of chartXml) {
+      const seriesIndexes = [...xml.matchAll(/<c:ser>[\s\S]*?<c:idx val="(\d+)"/g)].map((match) => match[1]);
+      expect(new Set(seriesIndexes).size).toBe(seriesIndexes.length);
+      expect(xml).not.toMatch(/<c:(?:barChart|lineChart|pieChart)>\s*<\/c:(?:barChart|lineChart|pieChart)>/);
+    }
+    const relXml = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^ppt\/charts\/_rels\/chart\d+\.xml\.rels$/.test(name))
+        .map((name) => zip.file(name)!.async('string')),
+    );
+    expect(relXml.join('\n')).not.toContain('TargetMode="External"');
+    const notes = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^ppt\/notesSlides\/_rels\/notesSlide\d+\.xml\.rels$/.test(name))
+        .map((name) => zip.file(name)!.async('string')),
+    );
+    for (const rels of notes) {
+      const target = rels.match(/Target="\.\.\/slides\/(slide\d+\.xml)"/)?.[1];
+      if (target) expect(zip.file(`ppt/slides/${target}`)).toBeTruthy();
+    }
   });
 
   it('says when the selected dates contain no ROI review', async () => {

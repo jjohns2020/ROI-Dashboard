@@ -341,10 +341,20 @@ function rewriteSection(block: string, section: 'cat' | 'val', values: Array<str
   });
 }
 
-function rewriteSeries(block: string, categories: string[], series: ChartSeries) {
-  const named = block.replace(/(<c:tx>[\s\S]*?<c:v>)[^<]*(<\/c:v>)/, `$1${escapeText(series.name)}$2`);
+function rewriteSeries(block: string, categories: string[], series: ChartSeries, index: number) {
+  const named = block
+    .replace(/(<c:tx>[\s\S]*?<c:v>)[^<]*(<\/c:v>)/, `$1${escapeText(series.name)}$2`)
+    .replace(/<c:idx val="\d+"\s*\/>/, `<c:idx val="${index}"/>`)
+    .replace(/<c:order val="\d+"\s*\/>/, `<c:order val="${index}"/>`);
   const withCats = rewriteSection(named, 'cat', categories, undefined, false);
   return rewriteSection(withCats, 'val', series.values.map(num), series.format, true);
+}
+
+/** A chart plot with no series is invalid and makes PowerPoint refuse the file. */
+function dropEmptyPlots(xml: string) {
+  return xml.replace(/<c:(barChart|lineChart|pieChart|ofPieChart|doughnutChart|areaChart)>[\s\S]*?<\/c:\1>/g, (block) =>
+    block.includes('<c:ser>') ? block : '',
+  );
 }
 
 function withSeriesCount(xml: string, count: number) {
@@ -371,9 +381,13 @@ export function rewriteChartXml(xml: string, plot: ChartPlot): string {
   next = next.replace(/(<c:title>[\s\S]*?<a:t>)[^<]*(<\/a:t>)/, `$1${escapeText(plot.title)}$2`);
   let index = 0;
   next = next.replace(/<c:ser>[\s\S]*?<\/c:ser>/g, (block) => {
-    const series = plot.series[index++];
-    return series ? rewriteSeries(block, plot.categories, series) : '';
+    const series = plot.series[index];
+    if (!series) return '';
+    const rewritten = rewriteSeries(block, plot.categories, series, index);
+    index += 1;
+    return rewritten;
   });
+  next = dropEmptyPlots(next);
   if (plot.categories.length > 8) next = next.replaceAll('<c:showVal val="1"/>', '<c:showVal val="0"/>');
   if (plot.stack) {
     next = next.replaceAll('<c:grouping val="clustered"/>', '<c:grouping val="stacked"/>');

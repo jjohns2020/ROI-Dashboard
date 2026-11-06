@@ -64,11 +64,8 @@ export function buildClientDeck(input: DeckInput) {
       link.download = fileName;
       document.body.appendChild(link);
       link.click();
-      window.setTimeout(() => {
-        URL.revokeObjectURL(url);
-        link.remove();
-      }, 1000);
-      return fileName;
+      link.remove();
+      return url;
     },
   };
 }

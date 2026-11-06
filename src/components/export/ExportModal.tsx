@@ -19,9 +19,15 @@ export function ExportModal() {
   const blocked = !canExport(ov);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ url: string; fileName: string } | null>(null);
   useEffect(() => {
     if (state.exportOpen) setMessage(null);
   }, [state.exportOpen]);
+  useEffect(() => {
+    if (state.exportOpen || !saved) return;
+    URL.revokeObjectURL(saved.url);
+    setSaved(null);
+  }, [state.exportOpen, saved]);
 
   async function download() {
     if (state.role === 'client' || blocked || busy) return;
@@ -42,7 +48,13 @@ export function ExportModal() {
         rmLevel: state.rmLevel,
         guarRatio,
       });
-      await pptx.writeFile({ fileName: plan.fileName });
+      const savedUrl = await pptx.writeFile({ fileName: plan.fileName });
+      if (savedUrl.startsWith('blob:')) {
+        setSaved((current) => {
+          if (current) URL.revokeObjectURL(current.url);
+          return { url: savedUrl, fileName: plan.fileName };
+        });
+      }
       setMessage('Downloaded ' + plan.fileName + '.');
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'The PowerPoint could not be created.');
@@ -81,7 +93,12 @@ export function ExportModal() {
         </p>
         {message && (
           <p className="note" id="exportMessage">
-            {message}
+            {message}{' '}
+            {saved && (
+              <a id="savePptx" href={saved.url} download={saved.fileName}>
+                Save {saved.fileName}
+              </a>
+            )}
           </p>
         )}
         <button className="btn primary" id="downloadPptx" type="button" disabled={blocked || busy} onClick={() => void download()}>

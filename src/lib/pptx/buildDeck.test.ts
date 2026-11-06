@@ -168,6 +168,8 @@ describe('PowerPoint export', () => {
     for (const xml of chartXml) {
       const seriesIndexes = [...xml.matchAll(/<c:ser>[\s\S]*?<c:idx val="(\d+)"/g)].map((match) => match[1]);
       expect(new Set(seriesIndexes).size).toBe(seriesIndexes.length);
+      const uniqueIds = [...xml.matchAll(/uniqueId val="([^"]+)"/g)].map((match) => match[1]);
+      expect(new Set(uniqueIds).size).toBe(uniqueIds.length);
       expect(xml).not.toMatch(/<c:(?:barChart|lineChart|pieChart)>\s*<\/c:(?:barChart|lineChart|pieChart)>/);
     }
     const relXml = await Promise.all(
@@ -176,6 +178,10 @@ describe('PowerPoint export', () => {
         .map((name) => zip.file(name)!.async('string')),
     );
     expect(relXml.join('\n')).not.toContain('TargetMode="External"');
+    const styleTargets = relXml.flatMap((rels) => [...rels.matchAll(/Target="(style\d+\.xml|colors\d+\.xml)"/g)].map((m) => m[1]));
+    expect(new Set(styleTargets).size).toBe(styleTargets.length);
+    const types = await zip.file('[Content_Types].xml')!.async('string');
+    for (const target of styleTargets) expect(types).toContain(`PartName="/ppt/charts/${target}"`);
     const notes = await Promise.all(
       Object.keys(zip.files)
         .filter((name) => /^ppt\/notesSlides\/_rels\/notesSlide\d+\.xml\.rels$/.test(name))

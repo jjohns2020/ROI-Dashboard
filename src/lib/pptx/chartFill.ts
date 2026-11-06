@@ -357,13 +357,20 @@ function dropEmptyPlots(xml: string) {
   );
 }
 
+/** Copies of a series need their own `c16:uniqueId`, or Office treats the chart as damaged. */
+function freshUniqueId(block: string, copy: number) {
+  return block.replace(/(uniqueId val="\{)([0-9A-Fa-f]{8})/g, (_, prefix: string) => `${prefix}${(0xf000 + copy).toString(16).toUpperCase().padStart(8, '0')}`);
+}
+
 function withSeriesCount(xml: string, count: number) {
   const series = xml.match(/<c:ser>[\s\S]*?<\/c:ser>/g) ?? [];
   if (!series.length || series.length >= count) return xml;
   const last = series[series.length - 1];
   let extra = '';
   for (let index = series.length; index < count; index++) {
-    extra += last.replace(/<c:idx val="\d+"\/>/, `<c:idx val="${index}"/>`).replace(/<c:order val="\d+"\/>/, `<c:order val="${index}"/>`);
+    extra += freshUniqueId(last, index)
+      .replace(/<c:idx val="\d+"\/>/, `<c:idx val="${index}"/>`)
+      .replace(/<c:order val="\d+"\/>/, `<c:order val="${index}"/>`);
   }
   const at = xml.lastIndexOf(last);
   return xml.slice(0, at + last.length) + extra + xml.slice(at + last.length);

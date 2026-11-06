@@ -86,6 +86,17 @@ describe('PowerPoint export', () => {
     expect(all).toContain('3.4 : 1');
     expect(all).toContain('$485,089');
     expect(all).toContain('Return Mail Automation');
+    expect(all).toContain('545,867');
+    expect(all).toContain('73.6%');
+    expect(all).toContain('1,248 hours or 0.60 FTE');
+    expect(all).toContain('1.73 FTE');
+    expect(all).toContain('$20,352');
+    expect(all).toContain('150,396');
+    expect(all).toContain('2.33 FTE hour savings via automation');
+    expect(all).not.toContain('<<');
+    expect(all).not.toContain('xxxxx');
+    expect(all).not.toContain('1,985');
+    expect(all).not.toContain('458k');
     expect(all).toContain('not validated production results');
     expect(all).toContain('Monthly split is illustrative; period totals are from the workbook.');
     const packed = await JSZip.loadAsync((await buildClientDeck(input).write()) as Uint8Array);
@@ -110,6 +121,12 @@ describe('PowerPoint export', () => {
     expect(all).toContain('ILLUSTRATIVE SAMPLE DATA');
     expect(all).toContain('17.2 : 1');
     expect(all).toContain('Dialer Performance');
+    expect(all).toContain('2,947,042');
+    expect(all).toContain('14.17 FTE');
+    expect(all).toContain('22.6 FTE hour savings via automation');
+    expect(all).toContain('$608,915');
+    expect(all).not.toContain('<<');
+    expect(all).not.toContain('xxxxx');
     expect(all).not.toContain('MaineHealth');
     const zip = await JSZip.loadAsync((await buildClientDeck(withDialer).write()) as Uint8Array);
     const chartXml = await Promise.all(
@@ -201,7 +218,7 @@ describe('PowerPoint export', () => {
   it('counts Return Mail by guarantors when that level is selected', async () => {
     const all = (await slideTexts(inputFor('maine', { rmLevel: 'guar' }))).join('\n');
     expect(all).toContain('counted by guarantors');
-    expect(all).toContain('2,364');
+    expect(all).toContain('1,803');
     expect(all).not.toContain('Avg Guar to Acct');
   });
 

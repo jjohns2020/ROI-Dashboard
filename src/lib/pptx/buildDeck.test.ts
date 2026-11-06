@@ -155,8 +155,15 @@ describe('PowerPoint export', () => {
     expect(deceased).toContain('Jan 2024');
     expect(deceased).toContain('Sep 2025');
     expect(deceased).not.toContain('10/2019');
-    expect(chartXml.some((xml) => xml.includes('Patient payments') && xml.includes('15762191'))).toBe(true);
-    expect(chartXml.some((xml) => xml.includes('Collection rate') && xml.includes('0.0663'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Patient payments') && xml.includes('Selected range') && xml.includes('Prior year') && xml.includes('15762191'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Collection rate') && xml.includes('3-month average') && xml.includes('0.0663'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('New % and Improved % by month') && xml.includes('Improved %'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Return mail results by month') && xml.includes('Equal / verified'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Propensity to pay'))).toBe(true);
+    expect(await zip.file('ppt/slides/slide5.xml')!.async('string')).not.toContain('<p:pic>');
+    expect(await zip.file('ppt/slides/slide14.xml')!.async('string')).not.toContain('<p:pic>');
+    expect(await zip.file('ppt/slides/slide18.xml')!.async('string')).not.toContain('<p:pic>');
+    expect(await zip.file('ppt/slides/slide27.xml')!.async('string')).not.toContain('<p:pic>');
     expect(chartXml.join('\n')).not.toContain('externalData');
   });
 

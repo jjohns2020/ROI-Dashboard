@@ -37,6 +37,7 @@ export function ExportModal() {
         insights,
         scrub: ds.scrubData[state.clientKey],
         medSrc: state.medSrc,
+        medCovFactor: medF('cov'),
         usesEin,
         rmLevel: state.rmLevel,
         guarRatio,

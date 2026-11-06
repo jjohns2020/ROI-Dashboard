@@ -1,9 +1,10 @@
 import JSZip from 'jszip';
-import { overlaps, sumRange } from '../dateRange';
-import { int, money, moneyFull } from '../format';
-import { returnMailScale, roiRatio } from '../roi';
+import { overlaps } from '../dateRange';
+import { moneyFull } from '../format';
+import { roiRatio } from '../roi';
 import type { DeckInput } from './buildDeck';
 import { addedCharts, plotsForTemplate, rewriteChartXml } from './chartFill';
+import { fillSlideFigures } from './placeholders';
 
 const TEMPLATE_FILE = 'Utilization Review Template_2025.pptx';
 
@@ -122,15 +123,6 @@ function fillSegmentation(xml: string, input: DeckInput) {
   return next;
 }
 
-function fillReturnMail(xml: string, input: DeckInput) {
-  const scaled = input.scrub.yoy.rm
-    .filter((row) => row[1] != null)
-    .map((row) => int(returnMailScale(row[1], input.rmLevel, input.guarRatio) as number));
-  const unit = input.rmLevel === 'guar' ? `counted by guarantors ${scaled[0] ?? ''}` : 'Monthly split is illustrative; period totals are from the workbook.';
-  let next = replaceExact(xml, 'Insert Observations and/or proposals', unit);
-  return replaceExact(next, 'Return Mail results: <<Insert Volume>>', `Return Mail results: ${unit}`);
-}
-
 function fillMedicaid(xml: string, input: DeckInput) {
   const detail = input.details.find((item) => /medicaid/i.test(item.name) && !item.empty);
   const workbook = input.client.scrubs.find((row) => row[0] === 'Medicaid');
@@ -148,18 +140,6 @@ function fillAgency(xml: string, input: DeckInput) {
   if (!data) return xml;
   const names = Object.keys(Object.values(data.periods)[0] ?? {});
   return replaceTrimmed(xml, 'Insert summary', `Agency Performance vs. Benchmark. ${names.join(', ')}.`);
-}
-
-function fillDialer(xml: string, input: DeckInput) {
-  const { fI, tI } = input.range;
-  const dialer = input.monthly.dialer;
-  const attempts = sumRange(dialer.attempts.slice(fI, tI + 1), 0, tI - fI + 1);
-  const payments = sumRange(dialer.payments.slice(fI, tI + 1), 0, tI - fI + 1);
-  return replaceExact(
-    xml,
-    'Total accounts in campaign: <<Insert>>',
-    `Dialer Performance. ILLUSTRATIVE SAMPLE DATA. Attempts ${Math.round(attempts).toLocaleString('en-US')}. Payments ${money(payments)}.`,
-  );
 }
 
 function fillSuccess(xml: string, input: DeckInput) {
@@ -354,9 +334,6 @@ export async function fillReviewTemplate(input: DeckInput): Promise<Uint8Array> 
   const zip = await JSZip.loadAsync(await templateBytes());
   const edits: Record<number, (xml: string) => string> = {
     1: (xml) => fillSlide1(xml, input),
-    18: (xml) => fillReturnMail(xml, input),
-    19: (xml) => fillDialer(xml, input),
-    20: (xml) => fillReturnMail(xml, input),
     21: (xml) => fillMedicaid(xml, input),
     27: (xml) => fillSegmentation(xml, input),
     32: (xml) => fillAgency(xml, input),
@@ -376,6 +353,7 @@ export async function fillReviewTemplate(input: DeckInput): Promise<Uint8Array> 
     let xml = await file.async('string');
     const edit = edits[number];
     if (edit) xml = edit(xml);
+    xml = fillSlideFigures(xml, number, input);
     xml = fillDates(xml, input);
     xml = scrubAbsentWorkflows(xml, phrases);
     zip.file(path, xml);

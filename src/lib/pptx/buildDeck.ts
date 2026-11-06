@@ -24,6 +24,8 @@ export interface DeckInput {
   insights: Insight[];
   scrub: ScrubData;
   medSrc: MedicaidSource;
+  /** Multiplier applied to Medicaid coverage on the dashboard. Defaults to 1. */
+  medCovFactor?: number;
   usesEin: boolean;
   rmLevel: ReturnMailLevel;
   guarRatio: number;

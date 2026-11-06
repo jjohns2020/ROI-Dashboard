@@ -1,8 +1,12 @@
+import { priorYearAligned, rolling } from '../dateRange';
+import { returnMailScale } from '../roi';
+import { visibleScrubs } from '../visibility';
 import type { DeckInput } from './buildDeck';
 
 export interface ChartSeries {
   name: string;
-  values: number[];
+  /** Null leaves a gap, matching a dashboard point that is not loaded yet. */
+  values: Array<number | null>;
   /** Excel format code. Percent values stay in the 0–1 range. */
   format?: string;
 }
@@ -11,6 +15,8 @@ export interface ChartPlot {
   title: string;
   categories: string[];
   series: ChartSeries[];
+  /** Draw bar series one on top of another, matching the dashboard stacked charts. */
+  stack?: boolean;
 }
 
 const COUNT = '#,##0';
@@ -21,32 +27,20 @@ function escapeText(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function num(value: number) {
-  if (!Number.isFinite(value)) return '0';
+function num(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return null;
   return String(Math.round(value * 10000) / 10000);
 }
 
-function points(values: string[]) {
+function points(values: Array<string | null>) {
   return `<c:ptCount val="${values.length}"/>${values
-    .map((value, index) => `<c:pt idx="${index}"><c:v>${escapeText(value)}</c:v></c:pt>`)
+    .map((value, index) => (value == null ? '' : `<c:pt idx="${index}"><c:v>${escapeText(value)}</c:v></c:pt>`))
     .join('')}`;
 }
 
 function selectedMonths(input: DeckInput) {
   const months = input.monthly.months.slice(input.range.fI, input.range.tI + 1);
   return months.length ? months : [input.rangeLabel];
-}
-
-function selectedValues(input: DeckInput, values: number[]) {
-  const slice = values.slice(input.range.fI, input.range.tI + 1).map((value) => (Number.isFinite(value) ? value : 0));
-  return slice.length ? slice : [0];
-}
-
-function rolling(values: number[]) {
-  return values.map((_, index) => {
-    const part = values.slice(Math.max(0, index - 2), index + 1);
-    return part.reduce((sum, value) => sum + value, 0) / part.length;
-  });
 }
 
 function detailChart(input: DeckInput, title: RegExp) {
@@ -86,118 +80,185 @@ function segmentMix(input: DeckInput, index: number): ChartPlot {
   };
 }
 
-/** One plot per template chart. Categories and values come from the dashboard date range. */
-export function plotsForTemplate(input: DeckInput): Map<number, ChartPlot> {
-  const months = selectedMonths(input);
-  const label = input.rangeLabel;
-  const piv = selectedValues(input, input.scrub.piv.vol);
-  const rmNew = selectedValues(input, input.scrub.rm.new);
-  const rmImp = selectedValues(input, input.scrub.rm.imp);
-  const rmEq = selectedValues(input, input.scrub.rm.eq);
-  const rmNh = selectedValues(input, input.scrub.rm.nh);
-  const rmVol = rmNew.map((value, index) => value + rmImp[index] + rmEq[index] + rmNh[index]);
-  const mailDollars = input.monthly.wf['Return Mail collections ($)'];
-  const mc = input.scrub.yoy.mc;
-  const ch = input.scrub.yoy.ch;
+function ranged(input: DeckInput, values: Array<number | null>) {
+  const slice = values.slice(input.range.fI, input.range.tI + 1);
+  return slice.length ? slice : [0];
+}
+
+function monthlyCount(input: DeckInput, values: number[], title: string, seriesName: string): ChartPlot {
+  return {
+    title: `${title} · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [{ name: seriesName, values: ranged(input, values), format: COUNT }],
+  };
+}
+
+/** Return-mail counts, scaled the same way as the dashboard when the view is guarantors. */
+function returnMailCounts(input: DeckInput) {
+  const scale = (values: number[]) => values.map((value) => returnMailScale(value, input.rmLevel, input.guarRatio) ?? 0);
+  const rows = {
+    new: scale(input.scrub.rm.new),
+    imp: scale(input.scrub.rm.imp),
+    eq: scale(input.scrub.rm.eq),
+    nh: scale(input.scrub.rm.nh),
+  };
+  const vol = rows.new.map((_, index) => rows.new[index] + rows.imp[index] + rows.eq[index] + rows.nh[index]);
+  return { ...rows, vol };
+}
+
+/** New %, Improved %, and their sum — the address chart on the dashboard. */
+function pivRates(input: DeckInput): ChartPlot {
+  const piv = input.scrub.piv;
+  const combined = piv.new.map((value, index) => value + piv.imp[index]);
+  return {
+    title: `New % and Improved % by month · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'New %', values: ranged(input, piv.new), format: PERCENT },
+      { name: 'Improved %', values: ranged(input, piv.imp), format: PERCENT },
+      { name: 'New + Improved %', values: ranged(input, combined), format: PERCENT },
+    ],
+  };
+}
+
+function returnMailMix(input: DeckInput): ChartPlot {
+  const mail = returnMailCounts(input);
+  return {
+    title: `Return mail results by month · ${input.rangeLabel}`,
+    stack: true,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'New', values: ranged(input, mail.new), format: COUNT },
+      { name: 'Improved', values: ranged(input, mail.imp), format: COUNT },
+      { name: 'Equal / verified', values: ranged(input, mail.eq), format: COUNT },
+      { name: 'No hit', values: ranged(input, mail.nh), format: COUNT },
+    ],
+  };
+}
+
+function returnMailRates(input: DeckInput): ChartPlot {
+  const mail = returnMailCounts(input);
+  const improved = mail.new.map((value, index) => (mail.vol[index] ? (value + mail.imp[index]) / mail.vol[index] : 0));
+  const hit = mail.new.map((value, index) => (mail.vol[index] ? (value + mail.imp[index] + mail.eq[index]) / mail.vol[index] : 0));
+  return {
+    title: `New + Improved rate and hit rate · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'New + Improved %', values: ranged(input, improved), format: PERCENT },
+      { name: 'Hit rate', values: ranged(input, hit), format: PERCENT },
+    ],
+  };
+}
+
+function patientPayments(input: DeckInput): ChartPlot {
+  return {
+    title: `Patient payments — ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'Prior year', values: priorYearAligned(input.monthly.pay, input.range), format: DOLLARS },
+      { name: 'Selected range', values: ranged(input, input.monthly.pay), format: DOLLARS },
+    ],
+  };
+}
+
+function collectionRate(input: DeckInput): ChartPlot {
+  return {
+    title: `Collection rate by month · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'Monthly', values: ranged(input, input.monthly.rate), format: PERCENT },
+      { name: '3-month average', values: ranged(input, rolling(input.monthly.rate, 3)), format: PERCENT },
+    ],
+  };
+}
+
+function medicaidCoverage(input: DeckInput): ChartPlot {
+  const factor = input.medCovFactor ?? 1;
+  const found = input.scrub.mc.cov.map((value, index) => (input.scrub.mc.rec[index] ? Math.round(value * factor) : 0));
+  const rate = found.map((value, index) => (input.scrub.mc.rec[index] ? value / input.scrub.mc.rec[index] : 0));
+  return {
+    title: `Active coverage found by month · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'Coverage found', values: ranged(input, found), format: COUNT },
+      { name: 'Hit rate', values: ranged(input, rate), format: PERCENT },
+    ],
+  };
+}
+
+function segmentCompare(input: DeckInput): ChartPlot {
   const seg = input.client.seg;
+  return {
+    title: `% of volume vs. % of payments by segment · ${input.rangeLabel}`,
+    categories: ['Seg 1', 'Seg 2', 'Seg 3', 'Seg 4', 'Seg 5'],
+    series: [
+      { name: '% Volume', values: seg?.vol ?? [0, 0, 0, 0, 0], format: PERCENT },
+      { name: '% Payments', values: seg?.pay ?? [0, 0, 0, 0, 0], format: PERCENT },
+    ],
+  };
+}
+
+function dialerPayments(input: DeckInput): ChartPlot {
+  return {
+    title: `Dialer payments by month · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [
+      { name: 'Dialer payments', values: ranged(input, input.monthly.dialer.payments), format: DOLLARS },
+      { name: '3-month average', values: ranged(input, rolling(input.monthly.dialer.payments, 3)), format: DOLLARS },
+    ],
+  };
+}
+
+function dialerContactRate(input: DeckInput): ChartPlot {
+  const rate = input.monthly.dialer.contacts.map((contacts, index) => {
+    const attempts = input.monthly.dialer.attempts[index];
+    return attempts ? contacts / attempts : 0;
+  });
+  return {
+    title: `Contact rate by month · ${input.rangeLabel}`,
+    categories: selectedMonths(input),
+    series: [{ name: 'Contact rate', values: ranged(input, rate), format: PERCENT }],
+  };
+}
+
+/** One plot per template chart, using the series the dashboard draws for that workflow. */
+export function plotsForTemplate(input: DeckInput): Map<number, ChartPlot> {
+  const label = input.rangeLabel;
   const plots = new Map<number, ChartPlot>();
-  plots.set(1, {
-    title: `Address verification · ${label}`,
-    categories: months,
-    series: [
-      { name: 'PIV volume', values: piv, format: COUNT },
-      { name: '3-month average', values: rolling(piv), format: COUNT },
-    ],
-  });
-  plots.set(2, {
-    title: `PFC transactions · ${label}`,
-    categories: months,
-    series: [
-      { name: 'Transactions', values: piv, format: COUNT },
-      { name: '3-month average', values: rolling(piv), format: COUNT },
-    ],
-  });
+  plots.set(1, pivRates(input));
+  plots.set(2, monthlyCount(input, input.scrub.piv.vol, 'PIV volume by month', 'PIV transactions'));
   plots.set(3, distribution(input, /propensity/i, 'Propensity to pay'));
   plots.set(4, distribution(input, /fpl/i, 'FPL distribution'));
-  plots.set(5, {
-    title: `Bankruptcy results · ${label}`,
-    categories: months,
-    series: [{ name: 'Bankruptcy results', values: selectedValues(input, input.scrub.bk), format: COUNT }],
-  });
+  plots.set(5, monthlyCount(input, input.scrub.bk, 'Bankruptcy results by month', 'Bankruptcy results'));
+  const bankruptcyYears = input.scrub.yoy.bk.filter((row) => row[1] != null);
   plots.set(6, {
-    title: `Chapter split is not in this review · ${label}`,
-    categories: [label],
-    series: [
-      { name: 'Chapter 7', values: [0], format: PERCENT },
-      { name: 'Chapter 13', values: [0], format: PERCENT },
-    ],
+    title: `Bankruptcy results, year over year · ${label}`,
+    categories: bankruptcyYears.length ? bankruptcyYears.map((row) => String(row[0])) : [label],
+    series: [{ name: 'Results', values: bankruptcyYears.length ? bankruptcyYears.map((row) => Number(row[1])) : [0], format: COUNT }],
   });
-  plots.set(7, {
-    title: `Deceased results · ${label}`,
-    categories: months,
-    series: [{ name: 'Deceased results', values: selectedValues(input, input.scrub.dc), format: COUNT }],
-  });
-  plots.set(8, {
-    title: `Deceased results · ${label}`,
-    categories: months,
-    series: [{ name: 'Deceased results', values: selectedValues(input, input.scrub.dc), format: COUNT }],
-  });
-  plots.set(9, {
-    title: `Return mail · ${label}`,
-    categories: months,
-    series: [
-      { name: 'Return mail volume', values: rmVol, format: COUNT },
-      { name: 'New', values: rmNew, format: COUNT },
-      { name: 'Improved', values: rmImp, format: COUNT },
-    ],
-  });
-  plots.set(10, {
-    title: `Return mail collections · ${label}`,
-    categories: months,
-    series: [{ name: 'Collections', values: mailDollars ? selectedValues(input, mailDollars) : rmVol, format: mailDollars ? DOLLARS : COUNT }],
-  });
-  plots.set(11, {
-    title: `Medicaid · ${label}`,
-    categories: mc.length ? mc.map((row) => String(row[0])) : [label],
-    series: [
-      { name: 'Payments', values: mc.length ? mc.map((row) => Number(row[1]) || 0) : [0], format: DOLLARS },
-      { name: 'Hit rate', values: mc.length ? mc.map((row) => Number(row[2]) || 0) : [0], format: PERCENT },
-    ],
-  });
-  plots.set(12, {
-    title: `Charity · ${label}`,
-    categories: ch.length ? ch.map((row) => String(row[0])) : [label],
-    series: [
-      { name: 'Qualified accounts', values: ch.length ? ch.map((row) => Number(row[1]) || 0) : [0], format: COUNT },
-      { name: 'Qualified balance', values: ch.length ? ch.map((row) => Number(row[2]) || 0) : [0], format: DOLLARS },
-    ],
-  });
+  plots.set(7, monthlyCount(input, input.scrub.dc, 'Deceased results by month', 'Deceased results'));
+  plots.set(8, monthlyCount(input, input.scrub.dc, 'Deceased results by month', 'Deceased results'));
+  plots.set(9, returnMailMix(input));
+  plots.set(10, returnMailRates(input));
+  plots.set(11, medicaidCoverage(input));
+  plots.set(12, monthlyCount(input, input.scrub.ch, 'Charity accounts qualified by month', 'Charity accounts qualified'));
+  const seg = input.client.seg;
   plots.set(13, {
     title: `Segment volume · ${label}`,
-    categories: ['Segment 1', 'Segment 2', 'Segment 3', 'Segment 4', 'Segment 5'],
-    series: [{ name: '% of volume', values: seg?.vol ?? [0, 0, 0, 0, 0], format: PERCENT }],
+    categories: ['Seg 1', 'Seg 2', 'Seg 3', 'Seg 4', 'Seg 5'],
+    series: [{ name: '% Volume', values: seg?.vol ?? [0, 0, 0, 0, 0], format: PERCENT }],
   });
   plots.set(14, {
     title: `Segment payments · ${label}`,
-    categories: ['Segment 1', 'Segment 2', 'Segment 3', 'Segment 4', 'Segment 5'],
-    series: [{ name: '% of payments', values: seg?.pay ?? [0, 0, 0, 0, 0], format: PERCENT }],
+    categories: ['Seg 1', 'Seg 2', 'Seg 3', 'Seg 4', 'Seg 5'],
+    series: [{ name: '% Payments', values: seg?.pay ?? [0, 0, 0, 0, 0], format: PERCENT }],
   });
   for (let index = 0; index < 5; index++) plots.set(15 + index, segmentMix(input, index));
-  const included = [
-    ['PFC', input.details.some((detail) => /financial clearance|address/i.test(detail.name) && !detail.empty)],
-    ['Bankruptcy', input.details.some((detail) => /bankruptcy/i.test(detail.name) && !detail.empty)],
-    ['Deceased', input.details.some((detail) => /deceased/i.test(detail.name) && !detail.empty)],
-    ['Return mail', input.details.some((detail) => /return mail/i.test(detail.name) && !detail.empty)],
-    ['Medicaid', input.details.some((detail) => /medicaid/i.test(detail.name) && !detail.empty)],
-    ['Charity', input.details.some((detail) => /charity/i.test(detail.name) && !detail.empty)],
-    ['Segmentation', !!input.client.seg],
-    ['Agency', !!input.client.agency],
-    ['Dialer', !!input.client.dialer],
-  ] as const;
+  const value = visibleScrubs(input.client);
   plots.set(20, {
-    title: `Workflows in this review · ${label}`,
-    categories: included.map((row) => row[0]),
-    series: [{ name: 'Included', values: included.map((row) => (row[1] ? 1 : 0)), format: COUNT }],
+    title: `Where the value came from · ${label}`,
+    categories: value.length ? value.map((row) => row[0]) : [label],
+    series: [{ name: 'Quantified benefit', values: value.length ? value.map((row) => row[1]) : [0], format: DOLLARS }],
   });
   return plots;
 }
@@ -214,52 +275,32 @@ export interface AddedChart {
 
 const emu = (inches: number) => Math.round(inches * 914400);
 
-/** Dashboard graphs that the template does not already chart: payments, collection rate, dialer, and agency. */
+function place(slide: number, sourceChart: number, plot: ChartPlot, x: number, y: number, cx: number, cy: number): AddedChart {
+  return { slide, sourceChart, plot, x: emu(x), y: emu(y), cx: emu(cx), cy: emu(cy) };
+}
+
+/**
+ * Dashboard graphs placed on top of the template's example screenshots, plus payments,
+ * collection rate, dialer, and agency where the template has no chart for them.
+ */
 export function addedCharts(input: DeckInput): AddedChart[] {
-  const months = selectedMonths(input);
-  const label = input.rangeLabel;
   const charts: AddedChart[] = [
-    {
-      slide: 39,
-      sourceChart: 8,
-      x: emu(0.7),
-      y: emu(0.55),
-      cx: emu(9.15),
-      cy: emu(10.05),
-      plot: {
-        title: `Patient payments · ${label}`,
-        categories: months,
-        series: [{ name: 'Patient payments', values: selectedValues(input, input.monthly.pay), format: DOLLARS }],
-      },
-    },
-    {
-      slide: 39,
-      sourceChart: 8,
-      x: emu(10.0),
-      y: emu(0.55),
-      cx: emu(9.15),
-      cy: emu(10.05),
-      plot: {
-        title: `Collection rate · ${label}`,
-        categories: months,
-        series: [{ name: 'Collection rate', values: selectedValues(input, input.monthly.rate), format: PERCENT }],
-      },
-    },
+    place(39, 8, patientPayments(input), 0.7, 0.55, 9.15, 10.05),
+    place(39, 8, collectionRate(input), 10.0, 0.55, 9.15, 10.05),
+    place(5, 2, monthlyCount(input, input.scrub.piv.vol, 'PIV volume by month', 'PIV transactions'), 10.58, 3.36, 7.24, 4.54),
+    place(7, 2, distribution(input, /propensity/i, 'Propensity to pay'), 10.75, 4.27, 5.42, 2.38),
+    place(7, 2, distribution(input, /fpl/i, 'FPL distribution'), 10.74, 7.44, 5.18, 2.88),
+    place(10, 2, monthlyCount(input, input.scrub.bk, 'Bankruptcy results by month', 'Bankruptcy results'), 12.3, 1.55, 5.2, 8.8),
+    place(11, 2, monthlyCount(input, input.scrub.bk, 'Bankruptcy results by month', 'Bankruptcy results'), 0.7, 5.12, 18.2, 5.2),
+    place(14, 2, monthlyCount(input, input.scrub.dc, 'Deceased results by month', 'Deceased results'), 8.17, 2.12, 11.5, 7.0),
+    place(15, 2, monthlyCount(input, input.scrub.dc, 'Deceased results by month', 'Deceased results'), 0.75, 4.62, 16.0, 5.7),
+    place(18, 9, returnMailMix(input), 7.61, 2.3, 10.5, 6.85),
+    place(25, 2, monthlyCount(input, input.scrub.ch, 'Charity accounts qualified by month', 'Charity accounts qualified'), 0.75, 4.96, 17.2, 5.6),
+    place(27, 9, segmentCompare(input), 1.5, 2.15, 14.9, 2.3),
   ];
   if (input.client.dialer) {
-    charts.push({
-      slide: 19,
-      sourceChart: 8,
-      x: emu(8.2),
-      y: emu(1.55),
-      cx: emu(8.7),
-      cy: emu(8.15),
-      plot: {
-        title: `Dialer payments · ${label}`,
-        categories: months,
-        series: [{ name: 'Dialer payments', values: selectedValues(input, input.monthly.dialer.payments), format: DOLLARS }],
-      },
-    });
+    charts.push(place(19, 8, dialerPayments(input), 8.2, 1.45, 8.7, 4.35));
+    charts.push(place(19, 8, dialerContactRate(input), 8.2, 5.85, 8.7, 3.85));
   }
   const agency = input.client.agencyData;
   if (input.client.agency && agency) {
@@ -274,25 +315,19 @@ export function addedCharts(input: DeckInput): AddedChart[] {
       const slide = slides[index];
       const box = boxes[index];
       if (!slide || !box) return;
-      charts.push({
-        slide,
-        sourceChart: 9,
-        x: emu(box.x),
-        y: emu(box.y),
-        cx: emu(box.cx),
-        cy: emu(box.cy),
-        plot: {
-          title: `${period} placements · ${label}`,
+      charts.push(
+        place(slide, 9, {
+          title: `${period} placements · ${input.rangeLabel}`,
           categories: agency.buckets,
           series: Object.entries(series).map(([name, values]) => ({ name, values, format: PERCENT })),
-        },
-      });
+        }, box.x, box.y, box.cx, box.cy),
+      );
     });
   }
   return charts;
 }
 
-function rewriteSection(block: string, section: 'cat' | 'val', values: string[], format: string | undefined, numeric: boolean) {
+function rewriteSection(block: string, section: 'cat' | 'val', values: Array<string | null>, format: string | undefined, numeric: boolean) {
   const sectionRe = new RegExp(`<c:${section}>[\\s\\S]*?</c:${section}>`);
   if (!sectionRe.test(block)) return block;
   return block.replace(sectionRe, (sectionXml) => {
@@ -312,10 +347,27 @@ function rewriteSeries(block: string, categories: string[], series: ChartSeries)
   return rewriteSection(withCats, 'val', series.values.map(num), series.format, true);
 }
 
+function withSeriesCount(xml: string, count: number) {
+  const series = xml.match(/<c:ser>[\s\S]*?<\/c:ser>/g) ?? [];
+  if (!series.length || series.length >= count) return xml;
+  const last = series[series.length - 1];
+  let extra = '';
+  for (let index = series.length; index < count; index++) {
+    extra += last.replace(/<c:idx val="\d+"\/>/, `<c:idx val="${index}"/>`).replace(/<c:order val="\d+"\/>/, `<c:order val="${index}"/>`);
+  }
+  const at = xml.lastIndexOf(last);
+  return xml.slice(0, at + last.length) + extra + xml.slice(at + last.length);
+}
+
+function applyAxisFormat(axis: string, format: string) {
+  return axis.replace(/<c:numFmt[^/]*\/>/, `<c:numFmt formatCode="${escapeText(format)}" sourceLinked="0"/>`);
+}
+
 /** Replace cached chart points with dashboard series and drop the template's external workbook link. */
 export function rewriteChartXml(xml: string, plot: ChartPlot): string {
   let next = xml.replace(/<c15:filtered\w+Series>[\s\S]*?<\/c15:filtered\w+Series>/g, '');
   next = next.replace(/<c:externalData[\s\S]*?<\/c:externalData>/g, '');
+  next = withSeriesCount(next, plot.series.length);
   next = next.replace(/(<c:title>[\s\S]*?<a:t>)[^<]*(<\/a:t>)/, `$1${escapeText(plot.title)}$2`);
   let index = 0;
   next = next.replace(/<c:ser>[\s\S]*?<\/c:ser>/g, (block) => {
@@ -323,12 +375,20 @@ export function rewriteChartXml(xml: string, plot: ChartPlot): string {
     return series ? rewriteSeries(block, plot.categories, series) : '';
   });
   if (plot.categories.length > 8) next = next.replaceAll('<c:showVal val="1"/>', '<c:showVal val="0"/>');
-  const format = plot.series[0]?.format;
-  if (format && plot.series.every((series) => series.format === format)) {
-    const code = escapeText(format);
-    next = next.replace(/<c:valAx>[\s\S]*?<\/c:valAx>/g, (axis) =>
-      axis.replace(/<c:numFmt[^/]*\/>/, `<c:numFmt formatCode="${code}" sourceLinked="0"/>`),
-    );
+  if (plot.stack) {
+    next = next.replaceAll('<c:grouping val="clustered"/>', '<c:grouping val="stacked"/>');
+    next = next.replaceAll(/<c:overlap val="-?\d+"\/>/g, '<c:overlap val="100"/>');
+  }
+  const axes = [...next.matchAll(/<c:valAx>[\s\S]*?<\/c:valAx>/g)];
+  const shared = plot.series[0]?.format;
+  if (axes.length === 1 && shared && plot.series.every((series) => series.format === shared)) {
+    next = next.replace(axes[0][0], applyAxisFormat(axes[0][0], shared));
+  } else {
+    plot.series.forEach((series, axisIndex) => {
+      const axis = axes[axisIndex];
+      if (!series.format || !axis) return;
+      next = next.replace(axis[0], applyAxisFormat(axis[0], series.format));
+    });
   }
   return next;
 }

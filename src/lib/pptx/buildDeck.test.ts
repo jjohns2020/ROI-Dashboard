@@ -111,6 +111,14 @@ describe('PowerPoint export', () => {
     expect(all).toContain('17.2 : 1');
     expect(all).toContain('Dialer Performance');
     expect(all).not.toContain('MaineHealth');
+    const zip = await JSZip.loadAsync((await buildClientDeck(withDialer).write()) as Uint8Array);
+    const chartXml = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^ppt\/charts\/chart\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)!.async('string')),
+    );
+    expect(chartXml.some((xml) => xml.includes('Agency A') && xml.includes('Benchmark'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Dialer payments') && xml.includes(String(Math.round(withDialer.monthly.dialer.payments[0]))))).toBe(true);
     for (const phrase of INTERNAL) expect(all, phrase).not.toContain(phrase);
   });
 
@@ -127,6 +135,29 @@ describe('PowerPoint export', () => {
     expect(all).toContain('$243,566');
     expect(all).toContain('$608,915');
     expect(all).not.toContain('eInsights-delivered');
+  });
+
+  it('fills the selected dates and replaces template charts with dashboard series', async () => {
+    const input = inputFor('maine');
+    const zip = await JSZip.loadAsync((await buildClientDeck(input).write()) as Uint8Array);
+    const slides = await slideTexts(input);
+    const all = slides.join('\n');
+    expect(all).toContain('Jan 2024 – Sep 2025');
+    expect(all).not.toContain('<<Insert Period>>');
+    expect(all).not.toContain('August 6, 2026');
+    const chartXml = await Promise.all(
+      Object.keys(zip.files)
+        .filter((name) => /^ppt\/charts\/chart\d+\.xml$/.test(name))
+        .map((name) => zip.file(name)!.async('string')),
+    );
+    const deceased = chartXml.find((xml) => xml.includes('Deceased results'));
+    expect(deceased).toBeTruthy();
+    expect(deceased).toContain('Jan 2024');
+    expect(deceased).toContain('Sep 2025');
+    expect(deceased).not.toContain('10/2019');
+    expect(chartXml.some((xml) => xml.includes('Patient payments') && xml.includes('15762191'))).toBe(true);
+    expect(chartXml.some((xml) => xml.includes('Collection rate') && xml.includes('0.0663'))).toBe(true);
+    expect(chartXml.join('\n')).not.toContain('externalData');
   });
 
   it('says when the selected dates contain no ROI review', async () => {

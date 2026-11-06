@@ -2,7 +2,7 @@
  * Client ROI PowerPoint.
  *
  * The downloaded file is `Utilization Review Template_2025.pptx` with this client's
- * name, the selected dates, workflow coverage, ROI, and recommendations written into it.
+ * name, the selected dates, workflow volumes, rates, FTE, dollars, and recommendations written into it.
  * Chart series use the dashboard for that date range. Example figures and the template's
  * external workbook link are removed.
  * Internal pages and other clients are not added.

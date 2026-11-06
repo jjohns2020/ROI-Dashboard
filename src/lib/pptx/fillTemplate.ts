@@ -221,7 +221,17 @@ async function removeSlides(zip: JSZip, numbers: Set<number>) {
 }
 
 const EXAMPLE_PICTURES: Record<number, string[] | 'all'> = {
+  5: ['Picture 7'],
+  7: ['Picture 4', 'Picture 8', 'Picture 11'],
+  10: ['Picture 8', 'Picture 10', 'Picture 12'],
+  11: ['Picture 4'],
+  14: ['Picture 4'],
+  15: ['Picture 5'],
+  18: ['Picture 1'],
   19: 'all',
+  25: ['Picture 8', 'Picture 11'],
+  26: ['Picture 7'],
+  27: ['Picture 7'],
   33: ['Picture 1'],
   34: ['Picture 4'],
   35: ['Picture 1'],
@@ -251,10 +261,12 @@ async function addDashboardCharts(zip: JSZip, input: DeckInput, dropped: Set<num
   let nextChart = 1 + Math.max(0, ...Object.keys(zip.files).map((path) => Number(path.match(/^ppt\/charts\/chart(\d+)\.xml$/)?.[1] ?? 0)));
   const charts = addedCharts(input);
   const prepared = new Set<number>();
-  if (input.client.agency && input.client.agencyData && !dropped.has(37)) {
-    const path = 'ppt/slides/slide37.xml';
+  for (const slide of [26, 37]) {
+    if (dropped.has(slide)) continue;
+    if (slide === 37 && !(input.client.agency && input.client.agencyData)) continue;
+    const path = `ppt/slides/slide${slide}.xml`;
     const file = zip.file(path);
-    const names = EXAMPLE_PICTURES[37];
+    const names = EXAMPLE_PICTURES[slide];
     if (file && names) zip.file(path, removeExamplePictures(await file.async('string'), names));
   }
   for (const chart of charts) {

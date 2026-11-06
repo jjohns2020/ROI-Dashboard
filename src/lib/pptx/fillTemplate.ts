@@ -17,7 +17,8 @@ async function templateBytes(): Promise<Uint8Array> {
     const path = fileURLToPath(new URL(/* @vite-ignore */ `../../../${TEMPLATE_FILE}`, import.meta.url));
     return new Uint8Array(readFileSync(path));
   }
-  const base = new URL('.', window.location.href);
+  const configured = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL;
+  const base = new URL(configured && configured.length > 0 ? configured : '/', window.location.origin);
   const response = await fetch(new URL('utilization-review-template.pptx', base));
   if (!response.ok) throw new Error('The Utilization Review template could not be loaded.');
   return new Uint8Array(await response.arrayBuffer());
@@ -214,6 +215,15 @@ async function removeSlides(zip: JSZip, numbers: Set<number>) {
     contentTypes = contentTypes.replace(new RegExp(`<Override\\b[^>]*PartName="/ppt/${target}"[^>]*/>`), '');
     zip.remove(`ppt/slides/slide${number}.xml`);
     zip.remove(`ppt/slides/_rels/slide${number}.xml.rels`);
+    for (const path of Object.keys(zip.files)) {
+      if (!/^ppt\/notesSlides\/_rels\/notesSlide\d+\.xml\.rels$/.test(path)) continue;
+      const notesRels = zip.file(path);
+      if (!notesRels || !(await notesRels.async('string')).includes(`slide${number}.xml`)) continue;
+      const notesPart = path.replace('/_rels/', '/').replace(/\.rels$/, '');
+      zip.remove(path);
+      zip.remove(notesPart);
+      contentTypes = contentTypes.replace(new RegExp(`<Override\\b[^>]*PartName="/${notesPart}"[^>]*/>`), '');
+    }
   }
   zip.file('ppt/presentation.xml', presentation);
   zip.file('ppt/_rels/presentation.xml.rels', relationships);
@@ -239,6 +249,36 @@ const EXAMPLE_PICTURES: Record<number, string[] | 'all'> = {
   37: ['Picture 1'],
 };
 
+function highestNumber(names: string[], pattern: RegExp) {
+  return Math.max(0, ...names.map((name) => Number(name.match(pattern)?.[1] ?? 0)));
+}
+
+/** File name of a chart's style or color part, read from its relationships. */
+async function chartPartTarget(zip: JSZip, chart: number, type: 'chartStyle' | 'chartColorStyle') {
+  const rels = await zip.file(`ppt/charts/_rels/chart${chart}.xml.rels`)!.async('string');
+  for (const element of rels.match(/<Relationship\b[^>]*\/>/g) ?? []) {
+    if (!new RegExp(`Type="[^"]*/${type}"`).test(element)) continue;
+    const target = element.match(/Target="([^"]+)"/)?.[1];
+    if (target) return target.replace(/^\.\//, '');
+  }
+  throw new Error(`Chart ${chart} has no ${type} part.`);
+}
+
+function partType(contentTypes: string, part: string) {
+  const type = contentTypes.match(new RegExp(`<Override PartName="${part}" ContentType="([^"]+)"`))?.[1];
+  if (!type) throw new Error(`No content type for ${part}.`);
+  return type;
+}
+
+function addOverride(contentTypes: string, part: string, type: string) {
+  if (contentTypes.includes(`PartName="${part}"`)) return contentTypes;
+  return contentTypes.replace('</Types>', `<Override PartName="${part}" ContentType="${type}"/></Types>`);
+}
+
+function stripExternalRels(xml: string) {
+  return xml.replace(/<Relationship\b[^>]*TargetMode="External"[^>]*\/>/g, '');
+}
+
 function removeExamplePictures(xml: string, names: string[] | 'all') {
   return xml.replace(/<p:pic>[\s\S]*?<\/p:pic>/g, (picture) => {
     if (names === 'all') return '';
@@ -258,7 +298,10 @@ function chartFrame(shapeId: number, relId: string, x: number, y: number, cx: nu
 /** Payments, collection rate, dialer, and agency charts from the dashboard, placed on the matching template slides. */
 async function addDashboardCharts(zip: JSZip, input: DeckInput, dropped: Set<number>) {
   let contentTypes = await zip.file('[Content_Types].xml')!.async('string');
-  let nextChart = 1 + Math.max(0, ...Object.keys(zip.files).map((path) => Number(path.match(/^ppt\/charts\/chart(\d+)\.xml$/)?.[1] ?? 0)));
+  const chartNames = Object.keys(zip.files);
+  let nextChart = 1 + highestNumber(chartNames, /^ppt\/charts\/chart(\d+)\.xml$/);
+  let nextStyle = 1 + highestNumber(chartNames, /^ppt\/charts\/style(\d+)\.xml$/);
+  let nextColors = 1 + highestNumber(chartNames, /^ppt\/charts\/colors(\d+)\.xml$/);
   const charts = addedCharts(input);
   const prepared = new Set<number>();
   for (const slide of [26, 37]) {
@@ -274,17 +317,19 @@ async function addDashboardCharts(zip: JSZip, input: DeckInput, dropped: Set<num
     const source = await zip.file(`ppt/charts/chart${chart.sourceChart}.xml`)!.async('string');
     const number = nextChart++;
     zip.file(`ppt/charts/chart${number}.xml`, rewriteChartXml(source, chart.plot));
+    const styleSource = await chartPartTarget(zip, chart.sourceChart, 'chartStyle');
+    const colorsSource = await chartPartTarget(zip, chart.sourceChart, 'chartColorStyle');
+    const styleName = `style${nextStyle++}.xml`;
+    const colorsName = `colors${nextColors++}.xml`;
+    zip.file(`ppt/charts/${styleName}`, await zip.file(`ppt/charts/${styleSource}`)!.async('uint8array'));
+    zip.file(`ppt/charts/${colorsName}`, await zip.file(`ppt/charts/${colorsSource}`)!.async('uint8array'));
+    contentTypes = addOverride(contentTypes, `/ppt/charts/${styleName}`, partType(contentTypes, `/ppt/charts/${styleSource}`));
+    contentTypes = addOverride(contentTypes, `/ppt/charts/${colorsName}`, partType(contentTypes, `/ppt/charts/${colorsSource}`));
     zip.file(
       `ppt/charts/_rels/chart${number}.xml.rels`,
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" Target="colors${chart.sourceChart}.xml"/><Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle" Target="style${chart.sourceChart}.xml"/></Relationships>`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId2" Type="http://schemas.microsoft.com/office/2011/relationships/chartColorStyle" Target="${colorsName}"/><Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2011/relationships/chartStyle" Target="${styleName}"/></Relationships>`,
     );
-    const part = `/ppt/charts/chart${number}.xml`;
-    if (!contentTypes.includes(`PartName="${part}"`)) {
-      contentTypes = contentTypes.replace(
-        '</Types>',
-        `<Override PartName="${part}" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/></Types>`,
-      );
-    }
+    contentTypes = addOverride(contentTypes, `/ppt/charts/chart${number}.xml`, 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml');
     const relPath = `ppt/slides/_rels/slide${chart.slide}.xml.rels`;
     let rels = await zip.file(relPath)!.async('string');
     const used = [...rels.matchAll(/Id="rId(\d+)"/g)].map((match) => Number(match[1]));
@@ -342,6 +387,9 @@ export async function fillReviewTemplate(input: DeckInput): Promise<Uint8Array> 
     const file = zip.file(path);
     if (!plot || !file) continue;
     zip.file(path, rewriteChartXml(await file.async('string'), plot));
+    const relPath = path.replace('ppt/charts/', 'ppt/charts/_rels/') + '.rels';
+    const rels = zip.file(relPath);
+    if (rels) zip.file(relPath, stripExternalRels(await rels.async('string')));
   }
   await addDashboardCharts(zip, input, dropped);
   await removeSlides(zip, dropped);
